@@ -31,7 +31,7 @@ A physical desktop keyboard is required. This is local shared-keyboard co-op, no
 5. **月相庭院:** coordinate reversible northern and southern gates.
 6. **迷霧書庫:** recover from mist, rescue each other, preserve checkpoints.
 7. **極光接力塔:** link three towers into a crossing.
-8. **回家的燈塔:** combine your skills and return home together.
+8. **回家的潮汐:** combine your skills and return home together.
 
 **Pacing target:** approximately 30 minutes for a first-time pair, allowing time to read, discuss, explore and use hints. This is a design estimate, not a measured two-human completion time. Experienced players following a solution will finish faster. There are no forced waiting timers or artificial time gates.
 

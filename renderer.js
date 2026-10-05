@@ -261,8 +261,8 @@ function gate(ctx, x, y, s, type, open, p, t) {
   rounded(ctx, x - s * .33, y - s * .33, s * .66, s * .62, 4, '#253d48');
   for (let i = -1; i <= 1; i++) line(ctx, [[x + i * s * .19, y - s * .3], [x + i * s * .19, y + s * .28]], p.top, s * .065);
   ellipse(ctx, x, y - s * .035, s * .17, s * .2, p.edge, 0, c);
-  (type === 'root' ? rootMark : lightMark)(ctx, x, y - s * .025, s * .12, c);
-  for (let i = -1; i <= 1; i += 2) { ellipse(ctx, x + i * s * .38, y - s * .32, s * .04, s * .04, c); }
+  lockMark(ctx, x, y - s * .055, s * 1.2);
+  for (let i = -1; i <= 1; i += 2) { ellipse(ctx, x + i * s * .38, y - s * .32, s * .04, s * .04, i < 0 ? GOLD : ROOT); }
 }
 
 function crate(ctx, x, y, s, p, kind = '') {
@@ -306,7 +306,10 @@ function exitTile(ctx, x, y, s, active, p, t) {
     leaf(ctx, x + i * s * .29, y - s * .23, s * .15, i * .7, p.leaf);
     ellipse(ctx, x + i * s * .16, y - s * .42, s * .055, s * .055, active ? GOLD : p.flower);
   }
-  text(ctx, active ? '↑' : '⌂', x, y, s * .35, active ? '#fff2c2' : '#a1b6a3', 600);
+  line(ctx, [[x - s * .045, y - s * .32], [x - s * .045, y + s * .17]], active ? '#fff3c3' : '#d5e2d5', s * .025);
+  path(ctx, [[x - s * .01, y - s * .3], [x + s * .2, y + s * .04], [x - s * .01, y + s * .01]], active ? '#fff2c2' : '#e5ece0', '#9fb6a5', .6);
+  path(ctx, [[x - s * .08, y - s * .2], [x - s * .08, y + s * .01], [x - s * .24, y + s * .035]], active ? '#eed795' : '#b9cbbb');
+  path(ctx, [[x - s * .24, y + s * .1], [x + s * .24, y + s * .1], [x + s * .14, y + s * .19], [x - s * .14, y + s * .19]], active ? '#e5d498' : '#a0b5a4');
 }
 
 function checkpoint(ctx, x, y, s, active, p, t) {
@@ -321,7 +324,7 @@ function character(ctx, x, y, s, player, index, t, reduced, won = false) {
   const seed = index === 1 || player?.type === 'root' || player?.kind === 'seed';
   const color = seed ? ROOT : GOLD;
   const bob = reduced ? 0 : Math.sin(t * 2.4 + (seed ? 1 : 0)) * s * .025;
-  const dead = player?.dead || player?.respawning;
+  const dead = player?.downed || player?.dead || player?.respawning;
   ctx.save(); ctx.translate(x, y + bob); if (dead) ctx.globalAlpha = .5;
   ellipse(ctx, 0, s * .31 - bob, s * .27, s * .105, 'rgba(1,19,29,.35)');
   glow(ctx, 0, 0, s * .67, color, .13);
@@ -332,13 +335,13 @@ function character(ctx, x, y, s, player, index, t, reduced, won = false) {
     ellipse(ctx, 0, s * .015, s * .25, s * .29, '#a8dbc4', -.05, '#315756');
     path(ctx, [[-s * .25, -s * .005], [-s * .28, s * .12], [-s * .09, s * .14], [0, s * .22], [s * .08, s * .13], [s * .25, s * .16], [s * .24, -s * .01]], '#48867b');
     ellipse(ctx, 0, -s * .07, s * .23, s * .205, '#d1edd0');
-    ellipse(ctx, -s * .075, -s * .085, s * .024, s * .033, '#29484a');
-    ellipse(ctx, s * .075, -s * .085, s * .024, s * .033, '#29484a');
+    if (dead) { line(ctx, [[-s * .11, -s * .065], [-s * .055, -s * .065]], '#29484a', s * .022); line(ctx, [[s * .05, -s * .065], [s * .11, -s * .065]], '#29484a', s * .022); }
+    else { ellipse(ctx, -s * .075, -s * .085, s * .024, s * .033, '#29484a'); ellipse(ctx, s * .075, -s * .085, s * .024, s * .033, '#29484a'); }
     line(ctx, [[-s * .025, -s * .003], [0, s * .015], [s * .028, -s * .003]], '#668d77', s * .023);
     ellipse(ctx, -s * .14, -s * .018, s * .045, s * .022, '#9dccad'); ellipse(ctx, s * .14, -s * .018, s * .045, s * .022, '#9dccad');
     line(ctx, [[0, -s * .23], [s * .01, -s * .38]], '#75b997', s * .044);
-    leaf(ctx, s * .01, -s * .32, s * .25, -.9 + Math.sin(t * 1.3) * (reduced ? 0 : .025), '#a6e6aa', true);
-    leaf(ctx, s * .01, -s * .33, s * .29, .85, '#6bc69d', true);
+    leaf(ctx, s * .01, -s * .32, s * .25, (dead ? -1.8 : -.9) + Math.sin(t * 1.3) * (reduced ? 0 : .025), '#a6e6aa', true);
+    leaf(ctx, s * .01, -s * .33, s * .29, dead ? 1.9 : .85, '#6bc69d', true);
     ellipse(ctx, -s * .25, s * .085, s * .06, s * .045, '#d1edd0', -.5);
     ellipse(ctx, s * .24, s * .085, s * .06, s * .045, '#d1edd0', .5);
   } else {
@@ -348,7 +351,8 @@ function character(ctx, x, y, s, player, index, t, reduced, won = false) {
     ctx.save(); ctx.globalAlpha = .23; ctx.beginPath(); ctx.ellipse(0, -s * .06, s * .15, s * .25, 0, 0, TAU); ctx.strokeStyle = '#bd895a'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
     rounded(ctx, -s * .15, -s * .3, s * .3, s * .07, 3, '#cc9c61');
     line(ctx, [[-s * .075, -s * .31], [-s * .04, -s * .4], [s * .055, -s * .4], [s * .09, -s * .31]], '#f8d58b', s * .032);
-    ellipse(ctx, -s * .09, -s * .06, s * .026, s * .035, '#563e39'); ellipse(ctx, s * .09, -s * .06, s * .026, s * .035, '#563e39');
+    if (dead) { line(ctx, [[-s * .12, -s * .04], [-s * .055, -s * .04]], '#563e39', s * .022); line(ctx, [[s * .055, -s * .04], [s * .12, -s * .04]], '#563e39', s * .022); }
+    else { ellipse(ctx, -s * .09, -s * .06, s * .026, s * .035, '#563e39'); ellipse(ctx, s * .09, -s * .06, s * .026, s * .035, '#563e39'); }
     ellipse(ctx, -s * .16, s * .005, s * .045, s * .023, '#efb888'); ellipse(ctx, s * .16, s * .005, s * .045, s * .023, '#efb888');
     line(ctx, [[-s * .028, s * .027], [0, s * .043], [s * .029, s * .027]], '#96704b', s * .021);
     path(ctx, [[-s * .23, s * .09], [-s * .08, s * .12], [s * .1, s * .11], [s * .23, s * .085], [s * .17, s * .19], [-s * .17, s * .19]], '#f2be6d');
@@ -360,6 +364,13 @@ function character(ctx, x, y, s, player, index, t, reduced, won = false) {
   // Outlined role badges preserve identification without relying on hue alone.
   rounded(ctx, -s * .125, -s * .69, s * .25, s * .22, s * .07, '#123a48', color, 1);
   text(ctx, seed ? '2' : '1', 0, -s * .575, s * .16, color, 700);
+  if (dead) {
+    ctx.globalAlpha = 1;
+    rounded(ctx, -s * .33, s * .34, s * .66, s * .29, s * .08, '#303949', '#e5b6be', 1);
+    text(ctx, '救援', 0, s * .49, Math.max(10, s * .22), '#f7d2d4', 650);
+    ellipse(ctx, s * .3, -s * .3, s * .12, s * .12, '#744e64', 0, '#efbbc7');
+    text(ctx, '!', s * .3, -s * .3, s * .18, '#fff1d7', 800);
+  }
   if (won) star(ctx, s * .38, -s * .4, s * .12, '#fff3bd');
   ctx.restore();
 }
@@ -436,12 +447,12 @@ function motes(ctx, x, y, s, color, t, count = 5) {
   }
 }
 
-/** Render one read-only engine snapshot. time is a performance timestamp in ms. */
+/** Render one read-only engine snapshot. time is an elapsed timestamp in seconds. */
 export function render(ctx, state, options = {}) {
   if (!state?.map) { renderTitle(ctx, options.time || 0, !!options.reducedMotion); return; }
   const w = options.width || 1120, h = options.height || 680;
   const reduced = !!options.reducedMotion;
-  const t = reduced ? 0 : (options.time || 0) / 1000;
+  const t = reduced ? 0 : (options.time || 0);
   const p = BIOME_PALETTES[clamp(state.levelIndex || 0, 0, 7)];
   const cols = state.width || state.map[0]?.length || 21, rows = state.height || state.map.length || 13;
   const s = Math.min(44, (w - 100) / cols, (h - 100) / rows);
@@ -504,12 +515,16 @@ export function render(ctx, state, options = {}) {
     for (const n of state.nodes || []) {
       if (n.active && n.kind !== 'switch') continue;
       const actor = state.players?.[n.role];
-      if (actor && Math.abs(actor.x - n.x) + Math.abs(actor.y - n.y) <= 1) {
+      if (actor && !actor.downed && Math.abs(actor.x - n.x) + Math.abs(actor.y - n.y) <= 1) {
         const c = center(n); keyChip(ctx, n.role === 0 ? 'E' : '↵', c.x, c.y - s * .8, n.role === 0 ? GOLD : ROOT, s);
       }
     }
     for (const f of state.ferries || []) {
       if (state.players?.every(a => Math.abs(a.x - f.x) + Math.abs(a.y - f.y) <= 1)) { const c = center(f); keyChip(ctx, 'E', c.x, c.y - s * .8, GOLD, s); }
+    }
+    for (const a of state.players || []) if (a.downed) {
+      const rescuer = state.players.find(b => b.id !== a.id && !b.downed);
+      if (rescuer && Math.abs(rescuer.x - a.x) + Math.abs(rescuer.y - a.y) <= 1) { const c = center(a); keyChip(ctx, rescuer.id === 0 ? 'E' : '↵', c.x, c.y - s * .92, rescuer.id === 0 ? GOLD : ROOT, s); }
     }
   }
   // Illustrated margin marks reinforce an archipelago, rather than a boxed-in maze.
@@ -537,7 +552,7 @@ function titleHouse(ctx, x, y, s, p, roof = '#446674') {
 
 /** Original cover illustration; left side intentionally quiet for HTML hero copy. */
 export function renderTitle(ctx, time = 0, reducedMotion = false) {
-  const w = 1120, h = 680, p = BIOME_PALETTES[0], t = reducedMotion ? 0 : time / 1000;
+  const w = 1120, h = 680, p = BIOME_PALETTES[0], t = reducedMotion ? 0 : time;
   ctx.save(); seaBackground(ctx, w, h, p, t, reducedMotion, true);
   // Fine cartographic tide paths lead the eye toward the little village.
   ctx.save(); ctx.setLineDash([3, 8]); ctx.beginPath(); ctx.moveTo(315, 555); ctx.bezierCurveTo(460, 435, 495, 637, 658, 545); ctx.bezierCurveTo(821, 448, 1010, 574, 1050, 376); ctx.strokeStyle = 'rgba(188,219,199,.14)'; ctx.lineWidth = 1.1; ctx.stroke(); ctx.restore();

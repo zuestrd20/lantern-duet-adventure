@@ -1,7 +1,7 @@
 // Original pentatonic score, synthesized locally. No external recordings.
 export class DuetAudio {
-  constructor(Context=globalThis.AudioContext||globalThis.webkitAudioContext){this.Context=Context;this.ctx=null;this.enabled=false;this.active=false;this.next=0;this.beat=0;this.nodes=new Set();}
-  async enable(value){this.enabled=value;if(!value){this.stop();return false;}try{if(!this.ctx&&this.Context)this.ctx=new this.Context();if(!this.ctx){this.enabled=false;return false;}await this.ctx.resume();return true;}catch{this.enabled=false;return false;}}
+  constructor(Context=globalThis.AudioContext||globalThis.webkitAudioContext){this.Context=Context;this.ctx=null;this.enabled=false;this.active=false;this.next=0;this.beat=0;this.nodes=new Set();this.generation=0;}
+  async enable(value){const generation=++this.generation;this.enabled=value;if(!value){this.stop();return false;}try{if(!this.ctx&&this.Context)this.ctx=new this.Context();if(!this.ctx){this.enabled=false;return false;}await this.ctx.resume();return this.enabled;}catch{if(generation===this.generation)this.enabled=false;return this.enabled;}}
   setActive(value){this.active=value;if(!value)this.stop();else if(this.ctx)this.next=this.ctx.currentTime;}
   stop(){for(const n of this.nodes){try{n.stop();}catch{}}this.nodes.clear();if(this.ctx)this.next=this.ctx.currentTime;}
   note(freq,duration,volume=0.04,type='sine'){if(!this.enabled||!this.active||!this.ctx)return;const c=this.ctx,o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(0,c.currentTime);g.gain.linearRampToValueAtTime(volume,c.currentTime+0.025);g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+duration);o.connect(g);g.connect(c.destination);this.nodes.add(o);o.onended=()=>{o.disconnect();g.disconnect();this.nodes.delete(o);};o.start();o.stop(c.currentTime+duration+0.02);}

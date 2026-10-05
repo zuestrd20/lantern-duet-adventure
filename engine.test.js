@@ -112,3 +112,17 @@ test('all authored stages have valid bounds, original IDs, and indispensable rol
  assert.equal(new Set(campaign.map(l=>l.id)).size,8);
  for(const l of campaign){assert.equal(l.map.length,13);assert.ok(l.map.every(r=>r.length===21));for(const e of [...l.players,...l.nodes,...l.plates,...l.crates,...l.ferries,l.checkpoint,l.exit]){assert.ok(e.x>0&&e.x<20&&e.y>0&&e.y<12,`${l.id} has entity in bounds`);assert.notEqual(l.map[e.y][e.x],'#',`${l.id} has entity off walls`);}assert.ok(l.nodes.some(n=>n.required&&n.role===0));assert.ok(l.nodes.some(n=>n.required&&n.role===1));}
 });
+
+test('closing gate waits for both a crate and its pusher to leave the threshold',()=>{
+ const g=createGame({levelIndex:1});pushRight(g,5,3);pushRight(g,5,9);
+ walk(g,1,6,3);assert.equal(g.move(1,1,0),true);walk(g,0,7,3); // Replace the moved crate's pressure.
+ walk(g,1,8,2);for(let i=0;i<3;i++)assert.equal(g.move(1,0,1),true);
+ walk(g,1,7,6);for(let i=0;i<2;i++)assert.equal(g.move(1,1,0),true); // Crate now occupies gate.
+ g.move(0,-1,0);assert.equal(g.snapshot().gates[0].heldOpen,true);assert.equal(g.snapshot().crates[0].x,10);
+ assert.equal(g.move(1,1,0),true);assert.equal(g.snapshot().gates[0].heldOpen,true); // Actor now in gate.
+ assert.equal(g.move(1,-1,0),true);assert.equal(g.snapshot().gates[0].open,false);
+});
+
+test('same campaign action sequence produces the same deterministic snapshots',()=>{
+ for(let levelIndex=0;levelIndex<8;levelIndex++){const a=createGame({levelIndex}),b=createGame({levelIndex});solutions[levelIndex](a);solutions[levelIndex](b);assert.deepEqual(a.snapshot(),b.snapshot());}
+});
