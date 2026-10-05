@@ -1,0 +1,10 @@
+// Original pentatonic score, synthesized locally. No external recordings.
+export class DuetAudio {
+  constructor(Context=globalThis.AudioContext||globalThis.webkitAudioContext){this.Context=Context;this.ctx=null;this.enabled=false;this.active=false;this.next=0;this.beat=0;this.nodes=new Set();}
+  async enable(value){this.enabled=value;if(!value){this.stop();return false;}try{if(!this.ctx&&this.Context)this.ctx=new this.Context();if(!this.ctx){this.enabled=false;return false;}await this.ctx.resume();return true;}catch{this.enabled=false;return false;}}
+  setActive(value){this.active=value;if(!value)this.stop();else if(this.ctx)this.next=this.ctx.currentTime;}
+  stop(){for(const n of this.nodes){try{n.stop();}catch{}}this.nodes.clear();if(this.ctx)this.next=this.ctx.currentTime;}
+  note(freq,duration,volume=0.04,type='sine'){if(!this.enabled||!this.active||!this.ctx)return;const c=this.ctx,o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(0,c.currentTime);g.gain.linearRampToValueAtTime(volume,c.currentTime+0.025);g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+duration);o.connect(g);g.connect(c.destination);this.nodes.add(o);o.onended=()=>{o.disconnect();g.disconnect();this.nodes.delete(o);};o.start();o.stop(c.currentTime+duration+0.02);}
+  update(level=0){if(!this.enabled||!this.active||!this.ctx||this.ctx.state!=='running')return;if(this.ctx.currentTime<this.next)return;const score=[0,7,12,9,7,4,2,7,0,4,7,14,12,9,7,4];const roots=[146.83,164.81,130.81,174.61,146.83,164.81,196,130.81];const root=roots[level%8];this.note(root*2**(score[this.beat%score.length]/12),1.2,0.035,'sine');if(this.beat%4===0)this.note(root/2,2.5,0.045,'triangle');this.beat++;this.next=this.ctx.currentTime+0.43;}
+  effect(kind){if(kind==='node'){this.note(659.25,0.25,0.06);this.note(987.77,0.55,0.025);}else if(kind==='rescue')this.note(220,0.4,0.045,'triangle');else if(kind==='complete'){this.note(523.25,1,0.05);this.note(659.25,1.3,0.04);this.note(783.99,1.6,0.03);}}
+}
