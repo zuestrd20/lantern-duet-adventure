@@ -110,3 +110,15 @@ test('restarting an island preserves total session time while resetting local pu
   f.press('KeyR');f.action(1);assert.equal(f.game.snapshot().objective.done,0);assert.equal(f.game.snapshot().elapsed,0);assert.equal(f.$('elapsed').textContent,displayed);assert.equal(f.$('dialog').open,true);f.action();assert.equal(f.document.activeElement,f.$('game'));
  }finally{f.dispose();}
 });
+
+test('paused and reduced-motion frames avoid redundant canvas redraws while input still updates',async()=>{
+ const f=await boot();try{
+  f.start();f.frame(40);f.press('Space');f.frame(80);const pausedRenders=f.renders.length;
+  for(let i=0;i<120;i++)f.frame(100+i*17);
+  assert.equal(f.renders.length,pausedRenders,'paused screen is drawn once');
+  f.action(1);f.$('motion').click();f.frame(2200);const quiet=f.renders.length;
+  for(let i=0;i<120;i++)f.frame(2250+i*17);
+  assert.equal(f.renders.length,quiet,'reduced-motion idle screen is static');
+  f.press('KeyD');f.release('KeyD');f.frame(4350);assert.equal(f.renders.length,quiet+1,'input still redraws in reduced motion');
+ }finally{f.dispose();}
+});

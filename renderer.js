@@ -14,11 +14,33 @@ export const BIOME_PALETTES = [
 ];
 
 const TAU = Math.PI * 2;
-const FONT = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif';
+const FONT = '"Noto Sans TC", "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif';
 const GOLD = '#ffd788';
 const ROOT = '#9ce8c5';
 const hash = (x, y = 0) => { const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453123; return n - Math.floor(n); };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// Three bounded surfaces, never one per frame or per level. Cached rasterization
+// is produced entirely from the original canvas paths below; no image assets.
+let terrainCache = null, seaCache = null, titleCache = null;
+function surface(w, h) {
+  let canvas;
+  if (typeof OffscreenCanvas === 'function') canvas = new OffscreenCanvas(w, h);
+  else if (typeof document !== 'undefined' && document.createElement) { canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h; }
+  else return null;
+  const ctx = canvas.getContext('2d');
+  return ctx ? {canvas,ctx,w,h,key:null,time:-Infinity} : null;
+}
+
+function cachedSea(ctx, w, h, p, t, reduced) {
+  if (!seaCache || seaCache.w !== w || seaCache.h !== h) seaCache = surface(w, h);
+  if (!seaCache) { seaBackground(ctx,w,h,p,t,reduced); return; }
+  const key = `${p.sky}:${reduced}`;
+  if (seaCache.key !== key || (!reduced && (t - seaCache.time >= .2 || t < seaCache.time))) {
+    seaBackground(seaCache.ctx,w,h,p,t,reduced); seaCache.key = key; seaCache.time = t;
+  }
+  ctx.drawImage(seaCache.canvas,0,0);
+}
 
 function path(ctx, points, fill, stroke, lineWidth = 1) {
   ctx.beginPath();
@@ -463,22 +485,30 @@ export function render(ctx, state, options = {}) {
   const entities = [...(state.nodes || []), ...(state.gates || []), ...(state.plates || []), ...(state.crates || []), ...(state.ferries || []), state.checkpoint, state.exit].filter(Boolean);
   const occupied = (x, y) => entities.some(a => a.x === x && a.y === y) || state.players?.some(a => a.x === x && a.y === y);
   ctx.save();
-  seaBackground(ctx, w, h, p, t, reduced);
-  // A diffuse shoreline and the suspended island's shadow make the playfield feel physical.
-  rounded(ctx, ox - 10, oy + 18, cols * s + 20, rows * s + 14, 28, 'rgba(3,16,31,.20)');
-  rounded(ctx, ox - 5, oy + 10, cols * s + 10, rows * s + 12, 17, 'rgba(6,24,36,.13)', 'rgba(135,198,191,.09)', 1);
-  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
-    const cell = tile(x, y), px = ox + x * s, py = oy + y * s;
-    if (solid(x, y)) floorTile(ctx, px, py, s, p, x, y, {top: !solid(x, y - 1), bottom: !solid(x, y + 1), left: !solid(x - 1, y), right: !solid(x + 1, y)});
-    else if (cell === '!') hazardTile(ctx, px, py, s, t);
-    else if (cell === '~') streamTile(ctx, px, py, s, p, t);
+  cachedSea(ctx, w, h, p, t, reduced);
+  function drawTerrain(target) {
+    // Static island paths are expensive to rasterize but never change in play.
+    rounded(target, ox - 10, oy + 18, cols * s + 20, rows * s + 14, 28, 'rgba(3,16,31,.20)');
+    rounded(target, ox - 5, oy + 10, cols * s + 10, rows * s + 12, 17, 'rgba(6,24,36,.13)', 'rgba(135,198,191,.09)', 1);
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+      const cell = tile(x, y), px = ox + x * s, py = oy + y * s;
+      if (solid(x, y)) floorTile(target, px, py, s, p, x, y, {top: !solid(x, y - 1), bottom: !solid(x, y + 1), left: !solid(x - 1, y), right: !solid(x + 1, y)});
+      else if (cell === '!') hazardTile(target, px, py, s, 0);
+      else if (cell === '~') streamTile(target, px, py, s, p, 0);
+    }
+    for (let y = 1; y < rows - 1; y++) for (let x = 1; x < cols - 1; x++) {
+      if (tile(x, y) !== '.' || occupied(x, y)) continue;
+      const n = hash(x + 16, y + 40);
+      if (n > .93) { target.save(); target.globalAlpha = .45; ellipse(target, ox + (x + .75) * s, oy + (y + .76) * s, s * .045, s * .018, p.flower, n * 7); target.restore(); }
+    }
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (tile(x, y) === '#') wallTile(target, ox + x * s, oy + y * s, s, p, x, y, 0);
   }
-  // Small resting petals are decorative only; they avoid every game object.
-  for (let y = 1; y < rows - 1; y++) for (let x = 1; x < cols - 1; x++) {
-    if (tile(x, y) !== '.' || occupied(x, y)) continue;
-    const n = hash(x + 16, y + 40);
-    if (n > .93) { ctx.save(); ctx.globalAlpha = .45; ellipse(ctx, ox + (x + .75) * s, oy + (y + .76) * s, s * .045, s * .018, p.flower, n * 7); ctx.restore(); }
-  }
+  if (!terrainCache || terrainCache.w !== w || terrainCache.h !== h) terrainCache = surface(w,h);
+  if (terrainCache) {
+    const key = `${state.levelIndex}:${state.map.join('|')}`;
+    if (terrainCache.key !== key) { terrainCache.ctx.clearRect(0,0,w,h); drawTerrain(terrainCache.ctx); terrainCache.key = key; }
+    ctx.drawImage(terrainCache.canvas,0,0);
+  } else drawTerrain(ctx);
   for (const f of state.ferries || []) {
     const a = center(f.endpoints[0]), b = center(f.endpoints[1]);
     ctx.save(); ctx.setLineDash([3, 7]); line(ctx, [[a.x, a.y], [b.x, b.y]], 'rgba(224,221,181,.2)', 1.2); ctx.restore();
@@ -492,7 +522,6 @@ export function render(ctx, state, options = {}) {
   const players = (state.players || []).map((a, i) => ({...a, ...(options.playerPositions?.[i] || {}), index: i}));
   const overlap = players.length > 1 && Math.abs(players[0].x - players[1].x) < .45 && Math.abs(players[0].y - players[1].y) < .45;
   for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) if (tile(x, y) === '#') wallTile(ctx, ox + x * s, oy + y * s, s, p, x, y, t);
     for (const g of state.gates || []) if (g.y === y) { const c = center(g); if (g.kind === 'bridge') bridge(ctx, c.x, c.y, s, g.open, p, t); else gate(ctx, c.x, c.y, s, 'light', g.open, p, t); }
     for (const f of state.ferries || []) if (f.y === y) { const c = center(f); ferry(ctx, c.x, c.y, s, f.ready, p, t); }
     if (state.checkpoint?.y === y) { const c = center(state.checkpoint); moonstone(ctx, c.x, c.y, s, state.checkpoint.active, p); }
@@ -552,6 +581,15 @@ function titleHouse(ctx, x, y, s, p, roof = '#446674') {
 
 /** Original cover illustration; left side intentionally quiet for HTML hero copy. */
 export function renderTitle(ctx, time = 0, reducedMotion = false) {
+  if (!titleCache) titleCache = surface(1120,680);
+  if (!titleCache) { drawTitleFrame(ctx,time,reducedMotion); return; }
+  if (titleCache.key !== reducedMotion || (!reducedMotion && (time - titleCache.time >= .1 || time < titleCache.time))) {
+    drawTitleFrame(titleCache.ctx,time,reducedMotion); titleCache.key = reducedMotion; titleCache.time = time;
+  }
+  ctx.drawImage(titleCache.canvas,0,0);
+}
+
+function drawTitleFrame(ctx, time = 0, reducedMotion = false) {
   const w = 1120, h = 680, p = BIOME_PALETTES[0], t = reducedMotion ? 0 : time;
   ctx.save(); seaBackground(ctx, w, h, p, t, reducedMotion, true);
   // Fine cartographic tide paths lead the eye toward the little village.
